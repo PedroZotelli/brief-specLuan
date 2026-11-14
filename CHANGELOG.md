@@ -5,6 +5,27 @@ This project uses semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- The classifier reads Portuguese. The keyword rules only knew English, so a
+  Portuguese request fell back to `general` unless it contained an English term
+  ("pull request", "deploy"): 7 of 9 sample requests did. Each rule now also
+  carries Portuguese vocabulary under the same rule id (accents optional), with
+  Portuguese subjects, prohibitions ("Não implemente…", "Sem alterar…") and
+  pivots ("Nova tarefa", "Em vez disso"). Words that are also English or have
+  an everyday meaning are restricted or left out ("revise it" stays English;
+  "projeto", "quebra de linha" do not drive a type). The classifier adapter
+  version is now `1.2`. `tests/test_portuguese.py` covers a 160-prompt corpus.
+
+### Fixed
+
+- A short order is no longer treated as a follow-up. Any prompt under four
+  words got the few-lines context, so "Fix it", "Run the tests", "Corrija o bug"
+  or "Rode os testes" lost the task's profile, and a session that opened with one
+  was never classified. A prompt that opens with a work verb, in English or
+  Portuguese, is now substantive and keeps the full profile; "ok", "continue",
+  "Merge feito" and status questions stay short follow-ups.
+
 ### Changed
 
 - Proportional answers: a follow-up of fewer than four words ("ok", "merge done",

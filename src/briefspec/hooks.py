@@ -25,6 +25,7 @@ from briefspec.work_types import (
     classify_task,
     explicit_type_requested,
     is_clear_pivot,
+    is_order,
     is_substantive,
     type_profile,
 )
@@ -50,6 +51,7 @@ def _typed_marker(state: SessionState) -> str:
 
 # A follow-up shorter than this ("ok", "merge done", "continue") is not a new task:
 # it gets a few lines, not the full profile. Same floor as ``is_substantive``.
+# A short order ("Fix it", "Rode os testes") is a task, not a follow-up.
 SHORT_FOLLOW_UP_WORDS = 4
 SHORT_FOLLOW_UP_CONTEXT = (
     "Brief-Spec: short follow-up. Answer in a few lines, in proportion to the message. "
@@ -64,6 +66,7 @@ def _is_short_follow_up(prompt: str) -> bool:
         bool(value)
         and len(value.split()) < SHORT_FOLLOW_UP_WORDS
         and ("brief-spec" not in value.lower())
+        and not is_order(value)
     )
 
 

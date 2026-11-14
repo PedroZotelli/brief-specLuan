@@ -47,6 +47,18 @@ profile. A follow-up of fewer than four words that does not name Brief-Spec ("ok
 "continue") instead receives a short instruction to answer in a few lines; the typed Outcome Brief
 is still used when such a message closes a substantive task. The work type stays as it was.
 
+A short **order** is a task, not a follow-up. A prompt that opens with a work verb ("Fix it",
+"Run the tests", "Corrija o bug", "Rode os testes", optionally after "please" or "por favor")
+keeps the full profile, and it classifies the task when the session has no work type yet.
+
+### Languages
+
+The local classifier reads English and Portuguese. Each Portuguese pattern extends the English
+rule with the same id, so "Revise o pull request 42" and "Review pull request 42" produce the
+same work type, subject, and rule ids. Accents are optional ("revisao"). Other languages fall back
+to `general` unless the prompt carries an English or Portuguese keyword; state the type
+explicitly (`type: review`) to override.
+
 ### Checkpoint policies
 
 - `off`: no lifecycle checkpoint behavior; explicit skill use remains possible.

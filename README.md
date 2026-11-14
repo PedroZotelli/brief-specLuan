@@ -300,8 +300,9 @@ brief-spec --version
 # See the eight work types
 brief-spec types
 
-# Classify bounded task text (no network)
+# Classify bounded task text (no network); English and Portuguese are understood
 echo "Review the authentication module" | brief-spec classify - --json
+echo "Revise o módulo de autenticação" | brief-spec classify - --json
 
 # Validate an Outcome Brief
 brief-spec validate outcome path/to/handoff.md

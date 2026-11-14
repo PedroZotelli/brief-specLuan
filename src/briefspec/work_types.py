@@ -16,7 +16,7 @@ from briefspec.models import (
 
 PROFILE_VERSION = "1.0"
 MAX_CLASSIFICATION_CHARS = 64 * 1024
-CLASSIFIER_ADAPTER_VERSION = "1.1"
+CLASSIFIER_ADAPTER_VERSION = "1.2"  # 1.2: Portuguese vocabulary; a short order is substantive
 MIN_INFERRED_MARGIN = 1
 
 
@@ -172,7 +172,7 @@ SUBJECTS = (
     "general",
 )
 
-_TYPE_RULES: dict[str, tuple[tuple[str, str], ...]] = {
+_ENGLISH_TYPE_RULES: dict[str, tuple[tuple[str, str], ...]] = {
     WorkType.DEBUGGING.value: (
         ("debug.explicit", r"\b(?:debug|diagnos(?:e|is)|root cause|stack trace|traceback)\b"),
         ("debug.failure", r"\b(?:failing|failure|broken|crash(?:es|ed)?|exception|error)\b"),
@@ -220,7 +220,7 @@ _TYPE_RULES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
-_SUBJECT_RULES: tuple[tuple[str, str, str], ...] = (
+_ENGLISH_SUBJECT_RULES: tuple[tuple[str, str, str], ...] = (
     ("pull-request", "subject.pull-request", r"\b(?:pull request|merge request|pr\s*#?\d+)\b"),
     ("codebase", "subject.codebase", r"\b(?:codebase|repository|repo)\b"),
     ("change-set", "subject.change-set", r"\b(?:diff|change set|changeset)\b"),
@@ -238,6 +238,123 @@ _SUBJECT_RULES: tuple[tuple[str, str, str], ...] = (
     ("issue", "subject.issue", r"\bissue\s*#?\d+\b"),
 )
 
+# Portuguese vocabulary for the same rules. Each pattern extends the English
+# rule with the same id, so a Portuguese request scores exactly like its English
+# counterpart and the rule ids in a classification record stay the same set.
+# Accents are optional (people type "revisao"). Verbs are listed in the forms
+# used to ask for work (imperative, infinitive) and common nouns that also have
+# an everyday meaning ("projeto", "quebra de linha", "fonte") are left out.
+_PORTUGUESE_TYPE_RULES: dict[str, str] = {
+    "debug.explicit": (
+        r"\b(?:depur\w+|debug(?:ar|ue)|diagnostic(?:ar|o|ou)|diagnostiqu(?:e|em)|"
+        r"diagn[oó]sticos?|causa[ -]raiz|pilha de chamadas)\b"
+    ),
+    "debug.failure": (
+        r"\b(?:falh(?:a|as|am|ar|ou|ando)|quebrad[oa]s?|quebrou|quebrando|"
+        r"trav(?:a|am|ou|ando)|exce[cç][aã]o|erros?|n[aã]o funciona)\b"
+    ),
+    "debug.why": (
+        r"\bpor ?qu[eê]\b[^.?!\n]{0,80}\b(?:falh\w+|quebr\w+|trav\w+|erros?|demor\w+|lent[oa])\b"
+    ),
+    # "revise" is also English ("revise it" means amend it), so it counts only
+    # when a Portuguese determiner follows: "Revise o PR", "Revise esta entrega".
+    "review.explicit": (
+        r"\b(?:revise(?=\s+(?:o|a|os|as|um|uma|est[ea]s?|ess[ea]s?|iss[oe]|ist[oe]|me[us]|"
+        r"minhas?|noss[oa]s?|tudo|cada|se)\b)|revis(?:em|ar|[aã]o|or|ora|ores)|"
+        r"audit(?:e|em|ar|oria)|inspecion(?:e|em|ar))\b"
+    ),
+    "review.pr": r"\b(?:pedido de merge|revis[aã]o de c[oó]digo)\b",
+    "review.diff": (
+        r"\b(?:diff|conjunto de mudan[cç]as|altera[cç][oõ]es)\b.*"
+        r"\b(?:risco|qualidade|corret[oa]|problemas?)\b"
+    ),
+    "operations.incident": (
+        r"\b(?:incidentes?|indisponibilidade|fora do ar|degrada[cç][aã]o|plant[aã]o)\b"
+    ),
+    "operations.release": (
+        r"\b(?:implant(?:e|em|ar|a[cç][aã]o)|publi(?:que|quem|car|ca[cç][aã]o)|lan[cç]amento)\b"
+    ),
+    "operations.observe": (
+        r"\b(?:monitor(?:e|em|ar|amento)|alertas?|recupera[cç][aã]o|restaur(?:e|em|ar)|"
+        r"produ[cç][aã]o)\b"
+    ),
+    "research.explicit": r"\b(?:pesquis(?:e|em|ar)|pesquisa de mercado|revis[aã]o de literatura)\b",
+    "research.current": (
+        r"\b(?:mais recentes?|mudan[cç]as recentes|mercado atual|estado da arte)\b"
+    ),
+    "research.compare": (
+        r"\b(?:compar(?:e|em|ar)|avali(?:e|em|ar)|recomend(?:e|em|ar))\b.*"
+        r"\b(?:ferramentas?|produtos?|fornecedor(?:es)?|modelos?)\b"
+    ),
+    "research.web": r"\b(?:busque|procure|pesquise) na (?:web|internet)\b",
+    "planning.explicit": r"\b(?:planej\w+|plano|roteiro|estrat[eé]gia|proposta)\b",
+    "planning.design": (
+        r"\b(?:projet(?:e|em|ar)|desenh(?:e|em|ar)|arquitet(?:e|ar|ura)|"
+        r"especifi(?:que|car|ca[cç][aã]o))\b"
+    ),
+    "planning.sequence": r"\b(?:fases?|etapas?|crit[eé]rios? de aceit(?:e|a[cç][aã]o))\b",
+    "exploration.explicit": (
+        r"\b(?:explor(?:e|em|ar)|mapei(?:e|em)|mapear|rastrei(?:e|em)|rastrear|"
+        r"entend(?:a|am|er))\b"
+    ),
+    "exploration.codebase": (
+        r"\b(?:base de c[oó]digo|reposit[oó]rio)\b.*"
+        r"\b(?:funciona|estruturad[oa]|organizad[oa]|fluxo|pontos? de entrada)\b"
+    ),
+    "exploration.where": (
+        r"\b(?:onde (?:fica|ficam|est[aá]|est[aã]o)|como funciona|explique como|me mostre como)\b"
+    ),
+    "implementation.explicit": (
+        r"\b(?:implement(?:e|em|ar)|constru(?:a|am|ir)|cri(?:e|em|ar)|escrev(?:a|am|er)|"
+        r"adicion(?:e|em|ar)|acrescent(?:e|em|ar)|remov(?:a|am|er)|refator(?:e|em|ar))\b"
+    ),
+    "implementation.change": (
+        r"\b(?:alter(?:e|em|ar)|atualiz(?:e|em|ar)|modifi(?:que|quem|car)|mud(?:e|em|ar)|"
+        r"migr(?:e|em|ar)|configur(?:e|em|ar)|instal(?:e|em|ar)|ajust(?:e|em|ar)|"
+        r"troqu(?:e|em)|trocar)\b"
+    ),
+    "implementation.fix": r"\b(?:corrij(?:a|am)|corrigir|consert(?:e|em|ar)|arrum(?:e|em|ar))\b",
+    "implementation.test": (
+        r"\b(?:adicion(?:e|em|ar)|escrev(?:a|am|er)|implement(?:e|em|ar)|cri(?:e|em|ar))\b.*"
+        r"\btestes?\b"
+    ),
+}
+
+_PORTUGUESE_SUBJECT_RULES: dict[str, str] = {
+    "pull-request": r"\bpedido de merge\b",
+    "codebase": r"\b(?:base de c[oó]digo|reposit[oó]rio)\b",
+    "change-set": r"\bconjunto de mudan[cç]as\b",
+    "incident": r"\b(?:incidentes?|indisponibilidade)\b",
+    "security": r"\b(?:seguran[cç]a|vulnerabilidades?|amea[cç]as?)\b",
+    "dependency": r"\bdepend[eê]ncias?\b",
+    "architecture": r"\barquitetura\b",
+    "release": r"\b(?:implanta[cç][aã]o|lan[cç]amento|publica[cç][aã]o)\b",
+    "refactor": r"\brefator\w+\b",
+    "test": r"\btestes?\b",
+    "document": r"\b(?:documenta[cç][aã]o|documentos?|guia)\b",
+    "data": r"\b(?:dados|banco de dados|tabelas?|esquema)\b",
+    "bug": r"\b(?:defeitos?|falhas?|erros?)\b",
+    "feature": r"\b(?:funcionalidades?|recurso novo)\b",
+}
+
+
+def _either(english: str, portuguese: str | None) -> str:
+    return english if portuguese is None else f"(?:{english})|(?:{portuguese})"
+
+
+_TYPE_RULES: dict[str, tuple[tuple[str, str], ...]] = {
+    work_type: tuple(
+        (rule_id, _either(pattern, _PORTUGUESE_TYPE_RULES.get(rule_id)))
+        for rule_id, pattern in rules
+    )
+    for work_type, rules in _ENGLISH_TYPE_RULES.items()
+}
+
+_SUBJECT_RULES: tuple[tuple[str, str, str], ...] = tuple(
+    (subject, rule_id, _either(pattern, _PORTUGUESE_SUBJECT_RULES.get(subject)))
+    for subject, rule_id, pattern in _ENGLISH_SUBJECT_RULES
+)
+
 _EXPLICIT_TYPE = re.compile(
     r"\b(?:brief-spec\s+)?(?:work\s+)?type\s*[:=]?\s*"
     r"(general|exploration|review|implementation|debugging|planning|research|operations)\b",
@@ -245,7 +362,9 @@ _EXPLICIT_TYPE = re.compile(
 )
 _PIVOT = re.compile(
     r"\b(?:new task|switch(?:ing)? to|instead(?:,|\s)|different task|now (?:please )?(?:review|"
-    r"explore|implement|debug|plan|research|deploy))\b",
+    r"explore|implement|debug|plan|research|deploy)|"
+    r"nova tarefa|outra tarefa|mud(?:e|ar|ando) para|em vez disso|agora (?:por favor )?(?:revise|"
+    r"explore|implemente|depure|planeje|pesquise|publique|implante|corrija))\b",
     re.IGNORECASE,
 )
 _NEGATED_SPAN = re.compile(
@@ -253,6 +372,32 @@ _NEGATED_SPAN = re.compile(
     r"shouldn't|cannot|can't)\b"
     r".*?(?=(?:[.;!?\n]|\b(?:but|however|instead)\b|$))",
     re.IGNORECASE | re.DOTALL,
+)
+# Portuguese prohibitions. A bare "não" is not one: it mostly describes ("o teste
+# que não passa"), so only "não" before a verb that gives or refuses an order
+# counts. A comma ends the span, as in "Sem alterar o código, explore ...".
+_PORTUGUESE_NEGATED_SPAN = re.compile(
+    r"\b(?:n[aã]o\s+(?:fa[cç]a|use|mexa|altere|toque|mude|implemente|revise|crie|escreva|"
+    r"adicione|remova|rode|execute|publique|implante|instale|corrija|pesquise|planeje|depure|"
+    r"explore|precis[ao]|quero|deve|devo|vamos)|nunca|jamais|evite|"
+    r"sem\s+(?:implementar|alterar|mudar|revisar|criar|escrever|publicar|instalar|corrigir|"
+    r"mexer|tocar|rodar|executar|fazer))\b"
+    r".*?(?=(?:[.,;!?\n]|\b(?:mas|por[eé]m|apenas|s[oó])\b|$))",
+    re.IGNORECASE | re.DOTALL,
+)
+# A request that opens with a work verb is an order, however short it is:
+# "Fix it", "Run the tests", "Corrija o bug", "Rode os testes". "continue",
+# "ok", "Merge feito" and questions about status are replies, not orders.
+_ORDER = re.compile(
+    r"^\W*(?:(?:please|now|por favor|agora|ent[aã]o)\W+)*"
+    r"(?:run|execute|test|fix|add|remove|delete|implement|build|create|write|refactor|update|"
+    r"change|deploy|review|audit|debug|plan|research|explore|install|configure|check|verify|"
+    r"revert|rename|"
+    r"rode|rodar|executar|teste|testar|corrija|corrigir|conserte|arrume|adicione|acrescente|"
+    r"remova|apague|implemente|construa|crie|escreva|refatore|atualize|altere|mude|troque|"
+    r"publique|implante|revise|audite|depure|planeje|pesquise|mapeie|instale|confira|"
+    r"verifique|aplique|reverta|renomeie|fa[cç]a|gere|valide|investigue|analise)\b",
+    re.IGNORECASE,
 )
 _QUOTED_SPAN = re.compile(r"(?P<quote>['\"`])(?P<body>.*?)(?P=quote)", re.DOTALL)
 _BRAND_SPAN = re.compile(r"\bbrief-?spec\b", re.IGNORECASE)
@@ -284,14 +429,22 @@ def explicit_type_requested(text: str) -> bool:
     return bool(_EXPLICIT_TYPE.search(text[:MAX_CLASSIFICATION_CHARS]))
 
 
+def is_order(text: str) -> bool:
+    """Whether the text opens with a work verb, in English or Portuguese."""
+    return bool(_ORDER.search(text[:MAX_CLASSIFICATION_CHARS]))
+
+
 def is_substantive(text: str) -> bool:
     value = text[:MAX_CLASSIFICATION_CHARS].strip()
     if not value:
         return False
     if re.search(r"\bbrief-spec\b", value, re.IGNORECASE):
         return True
+    if is_order(value):
+        # An order is a task however short it is ("Fix it", "Rode os testes").
+        return True
     if len(value.split()) < 4:
-        return False
+        return False  # a short reply: "ok", "continue", "Merge feito"
     return any(
         re.search(pattern, _affirmative_text(value), re.IGNORECASE)
         for rules in _TYPE_RULES.values()
@@ -307,7 +460,8 @@ def _affirmative_text(text: str) -> str:
 
     value = _BRAND_SPAN.sub(mask, text)
     value = _QUOTED_SPAN.sub(lambda match: " " * len(match.group(0)), value)
-    return _NEGATED_SPAN.sub(mask, value)
+    value = _NEGATED_SPAN.sub(mask, value)
+    return _PORTUGUESE_NEGATED_SPAN.sub(mask, value)
 
 
 def _finalize_classification(
